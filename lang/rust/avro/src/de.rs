@@ -653,8 +653,6 @@ impl<'a, 'de> de::Deserializer<'de> for &'a Deserializer<'de> {
                 visitor.visit_enum(EnumTupleDeserializer::new(value, variant ))
             },
             _ => {
-                
-             //   panic!("FOOBAR");
                 Err(de::Error::custom(format!(
                     "Expected a Record|Enum, but got {:?}",
                     self.input

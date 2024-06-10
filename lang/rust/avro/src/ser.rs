@@ -227,13 +227,16 @@ impl<'b> ser::Serializer for &'b mut Serializer {
     where
         T: Serialize + ?Sized,
     {
-        Ok(Value::Record(vec![
+     /*   Ok(Value::Record(vec![
             ("type".to_owned(), Value::Enum(index, variant.to_owned())),
             (
                 "value".to_owned(),
                 Value::Union(index, Box::new(value.serialize(self)?)),
             ),
         ]))
+         */
+
+        Ok(Value::Union(index, Box::new(value.serialize(self)?)))
     }
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {

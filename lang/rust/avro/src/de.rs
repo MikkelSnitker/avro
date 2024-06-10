@@ -55,6 +55,11 @@ pub struct EnumDeserializer<'de> {
     input: &'de [(String, Value)],
 }
 
+pub struct EnumTupleDeserializer<'de> {
+    input: &'de Box<Value>,
+    variant: &'de str,
+}
+
 impl<'de> Deserializer<'de> {
     pub fn new(input: &'de Value) -> Self {
         Deserializer { input }
@@ -96,6 +101,12 @@ impl<'a> EnumUnitDeserializer<'a> {
 impl<'de> EnumDeserializer<'de> {
     pub fn new(input: &'de [(String, Value)]) -> Self {
         EnumDeserializer { input }
+    }
+}
+
+impl<'de> EnumTupleDeserializer<'de> {
+    pub fn new(input: &'de Box<Value>, variant: &'de str) -> Self {
+        EnumTupleDeserializer { input, variant }
     }
 }
 
@@ -229,6 +240,104 @@ impl<'de> de::VariantAccess<'de> for EnumDeserializer<'de> {
         )
     }
 }
+
+impl<'de> de::EnumAccess<'de> for EnumTupleDeserializer<'de> {
+    type Error = Error;
+    type Variant = Self;
+
+    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error>
+    where
+        V: DeserializeSeed<'de>,
+    {
+        
+        let variant = seed.deserialize(StringDeserializer{
+            input: self.variant.into()
+        })?;
+
+        Ok((variant, self))
+        
+        //Err(de::Error::custom(format!("You suck more 1234 ;)")))
+        /*
+        self.input.first().map_or(
+            Err(de::Error::custom("A record must have a least one field")),
+            |item| match (item.0.as_ref(), &item.1) {
+                ("type", Value::String(x)) | ("type", Value::Enum(_, x)) => Ok((
+                    seed.deserialize(StringDeserializer {
+                        input: x.to_owned(),
+                    })?,
+                    self,
+                )),
+                (field, Value::String(_)) => Err(de::Error::custom(format!(
+                    "Expected first field named 'type': got '{field}' instead"
+                ))),
+                (_, _) => Err(de::Error::custom(
+                    "Expected first field of type String or Enum for the type name".to_string(),
+                )),
+            },
+        ) */
+    }
+}
+
+impl<'de> de::VariantAccess<'de> for EnumTupleDeserializer<'de> {
+    type Error = Error;
+
+    fn unit_variant(self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Error>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        seed.deserialize(&Deserializer::new(&self.input))
+        //Err(de::Error::custom("Fuck you"))
+        /*
+        self.input.get(1).map_or(
+            Err(de::Error::custom(
+                "Expected a newtype variant, got nothing instead.",
+            )),
+            |item| seed.deserialize(&Deserializer::new(&item.1)),
+        )*/
+    }
+
+    fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        Err(de::Error::custom("You suck more ;)"))
+      /* self.input.get(1).map_or(
+            Err(de::Error::custom(
+                "Expected a tuple variant, got nothing instead.",
+            )),
+            |item| de::Deserializer::deserialize_seq(&Deserializer::new(&item.1), visitor),
+        )
+        */
+    }
+
+    fn struct_variant<V>(
+        self,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        Err(de::Error::custom("You suck ;)"))
+        /*
+        self.input.get(1).map_or(
+            Err(de::Error::custom("Expected a struct variant, got nothing")),
+            |item| {
+                de::Deserializer::deserialize_struct(
+                    &Deserializer::new(&item.1),
+                    "",
+                    fields,
+                    visitor,
+                )
+            },
+        ) */
+    }
+}
+
 
 impl<'a, 'de> de::Deserializer<'de> for &'a Deserializer<'de> {
     type Error = Error;
@@ -519,22 +628,40 @@ impl<'a, 'de> de::Deserializer<'de> for &'a Deserializer<'de> {
     fn deserialize_enum<V>(
         self,
         _enum_name: &'static str,
-        _variants: &'static [&'static str],
+        variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
-    {
+    {   
+
+
+        
+        
+        //panic!("VALUE {:?}", self.input);
         match *self.input {
+           
+            
             // This branch can be anything...
             Value::Record(ref fields) => visitor.visit_enum(EnumDeserializer::new(fields)),
             Value::String(ref field) => visitor.visit_enum(EnumUnitDeserializer::new(field)),
             // This has to be a unit Enum
             Value::Enum(_index, ref field) => visitor.visit_enum(EnumUnitDeserializer::new(field)),
-            _ => Err(de::Error::custom(format!(
-                "Expected a Record|Enum, but got {:?}",
-                self.input
-            ))),
+            Value::Union(index, ref value) => {
+                
+                let variant = *variants.get(index as usize).unwrap();
+                visitor.visit_enum(EnumTupleDeserializer::new(value, variant ))
+            },
+            _ => {
+                
+             //   panic!("FOOBAR");
+                Err(de::Error::custom(format!(
+                    "Expected a Record|Enum, but got {:?}",
+                    self.input
+                )))
+            },
+            
+            
         }
     }
 

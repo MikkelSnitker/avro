@@ -235,7 +235,7 @@ impl<'b> ser::Serializer for &'b mut Serializer {
             ),
         ]))
          */
-
+        
         Ok(Value::Union(index, Box::new(value.serialize(self)?)))
     }
 

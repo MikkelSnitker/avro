@@ -25,7 +25,7 @@ use crate::{
     util::{zig_i32, zig_i64},
     AvroResult, Error,
 };
-use std::{borrow::Borrow, collections::HashMap};
+use std::{borrow::Borrow, collections::HashMap, ops::Index};
 
 /// Encode a `Value` into avro format.
 ///
@@ -64,6 +64,20 @@ pub(crate) fn encode_internal<S: Borrow<Schema>>(
             .get(&fully_qualified_name)
             .ok_or(Error::SchemaResolutionError(fully_qualified_name))?;
         return encode_internal(value, resolved.borrow(), names, enclosing_namespace, buffer);
+    }
+
+    if let Schema::Union(union_schema) = schema {
+        let mut index = 0;
+        for union_schema in &union_schema.schemas {
+            if value.validate(union_schema) {
+                break;
+            }
+            index+= 1;
+        }
+
+        encode_int(index as i32, buffer);
+        return encode_internal(value, union_schema.schemas.get(index).unwrap() , names, enclosing_namespace, buffer);
+
     }
 
     match value {
@@ -168,8 +182,9 @@ pub(crate) fn encode_internal<S: Borrow<Schema>>(
                     error!("Invalid symbol string {:?}.", &s[..]);
                     return Err(Error::GetEnumSymbol(s.clone()));
                 }
-            }
+            },
             _ => {
+                
                 return Err(Error::EncodeValueAsSchemaError {
                     value_kind: ValueKind::String,
                     supported_schema: vec![SchemaKind::String, SchemaKind::Enum],

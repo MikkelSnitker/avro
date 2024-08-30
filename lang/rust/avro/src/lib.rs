@@ -842,14 +842,14 @@
 mod bigdecimal;
 mod bytes;
 mod codec;
-mod de;
+pub mod de;
 mod decimal;
 mod decode;
 mod duration;
 mod encode;
 mod error;
 mod reader;
-mod ser;
+pub mod ser;
 mod util;
 mod writer;
 

@@ -20,7 +20,10 @@ use crate::{
     decode::{decode, decode_internal},
     from_value,
     rabin::Rabin,
-    schema::{AvroSchema, Names, ResolvedOwnedSchema, ResolvedSchema, Schema},
+    schema::{
+        resolve_names, resolve_names_with_schemata, AvroSchema, Names, ResolvedOwnedSchema,
+        ResolvedSchema, Schema,
+    },
     types::Value,
     util, AvroResult, Codec, Error,
 };
@@ -47,6 +50,7 @@ struct Block<'r, R> {
     writer_schema: Schema,
     schemata: Vec<&'r Schema>,
     user_metadata: HashMap<String, Vec<u8>>,
+    names_refs: Names,
 }
 
 impl<'r, R: Read> Block<'r, R> {
@@ -61,6 +65,7 @@ impl<'r, R: Read> Block<'r, R> {
             message_count: 0,
             marker: [0; 16],
             user_metadata: Default::default(),
+            names_refs: Default::default(),
         };
 
         block.read_header()?;
@@ -70,8 +75,6 @@ impl<'r, R: Read> Block<'r, R> {
     /// Try to read the header and to set the writer `Schema`, the `Codec` and the marker based on
     /// its content.
     fn read_header(&mut self) -> AvroResult<()> {
-        let meta_schema = Schema::map(Schema::Bytes);
-
         let mut buf = [0u8; 4];
         self.reader
             .read_exact(&mut buf)
@@ -81,12 +84,16 @@ impl<'r, R: Read> Block<'r, R> {
             return Err(Error::HeaderMagic);
         }
 
+        let meta_schema = Schema::map(Schema::Bytes);
         if let Value::Map(metadata) = decode(&meta_schema, &mut self.reader)? {
             self.read_writer_schema(&metadata)?;
             self.codec = read_codec(&metadata)?;
 
             for (key, value) in metadata {
-                if key == "avro.schema" || key == "avro.codec" {
+                if key == "avro.schema"
+                    || key == "avro.codec"
+                    || key == "avro.codec.compression_level"
+                {
                     // already processed
                 } else if key.starts_with("avro.") {
                     warn!("Ignoring unknown metadata key: {}", key);
@@ -179,13 +186,18 @@ impl<'r, R: Read> Block<'r, R> {
 
         let mut block_bytes = &self.buf[self.buf_idx..];
         let b_original = block_bytes.len();
-        let schemata = if self.schemata.is_empty() {
-            vec![&self.writer_schema]
-        } else {
-            self.schemata.clone()
+
+        let item = decode_internal(
+            &self.writer_schema,
+            &self.names_refs,
+            &None,
+            &mut block_bytes,
+        )?;
+        let item = match read_schema {
+            Some(schema) => item.resolve(schema)?,
+            None => item,
         };
-        let item =
-            from_avro_datum_schemata(&self.writer_schema, schemata, &mut block_bytes, read_schema)?;
+
         if b_original == block_bytes.len() {
             // from_avro_datum did not consume any bytes, so return an error to avoid an infinite loop
             return Err(Error::ReadBlock);
@@ -214,8 +226,10 @@ impl<'r, R: Read> Block<'r, R> {
                 .map(|(name, schema)| (name.clone(), (*schema).clone()))
                 .collect();
             self.writer_schema = Schema::parse_with_names(&json, names)?;
+            resolve_names_with_schemata(&self.schemata, &mut self.names_refs, &None)?;
         } else {
             self.writer_schema = Schema::parse(&json)?;
+            resolve_names(&self.writer_schema, &mut self.names_refs, &None)?;
         }
         Ok(())
     }
@@ -250,16 +264,48 @@ fn read_codec(metadata: &HashMap<String, Value>) -> AvroResult<Codec> {
         })
         .map(|codec_res| match codec_res {
             Ok(codec) => match Codec::from_str(codec) {
-                Ok(codec) => Ok(codec),
+                Ok(codec) => match codec {
+                    #[cfg(feature = "bzip")]
+                    Codec::Bzip2(_) => {
+                        use crate::Bzip2Settings;
+                        if let Some(Value::Bytes(bytes)) =
+                            metadata.get("avro.codec.compression_level")
+                        {
+                            Ok(Codec::Bzip2(Bzip2Settings::new(bytes[0])))
+                        } else {
+                            Ok(codec)
+                        }
+                    }
+                    #[cfg(feature = "xz")]
+                    Codec::Xz(_) => {
+                        use crate::XzSettings;
+                        if let Some(Value::Bytes(bytes)) =
+                            metadata.get("avro.codec.compression_level")
+                        {
+                            Ok(Codec::Xz(XzSettings::new(bytes[0])))
+                        } else {
+                            Ok(codec)
+                        }
+                    }
+                    #[cfg(feature = "zstandard")]
+                    Codec::Zstandard(_) => {
+                        use crate::ZstandardSettings;
+                        if let Some(Value::Bytes(bytes)) =
+                            metadata.get("avro.codec.compression_level")
+                        {
+                            Ok(Codec::Zstandard(ZstandardSettings::new(bytes[0])))
+                        } else {
+                            Ok(codec)
+                        }
+                    }
+                    _ => Ok(codec),
+                },
                 Err(_) => Err(Error::CodecNotSupported(codec.to_owned())),
             },
             Err(err) => Err(err),
         });
 
-    match result {
-        Some(res) => res,
-        None => Ok(Codec::Null),
-    }
+    result.unwrap_or_else(|| Ok(Codec::Null))
 }
 
 /// Main interface for reading Avro formatted values.

@@ -46,7 +46,7 @@ fn max_prec_for_len(len: usize) -> Result<usize, Error> {
 /// A valid Avro value.
 ///
 /// More information about Avro values can be found in the [Avro
-/// Specification](https://avro.apache.org/docs/current/spec.html#schemas)
+/// Specification](https://avro.apache.org/docs/current/specification/#schema-declaration)
 #[derive(Clone, Debug, PartialEq, strum_macros::EnumDiscriminants)]
 #[strum_discriminants(name(ValueKind))]
 pub enum Value {
@@ -124,6 +124,7 @@ pub enum Value {
     /// Universally unique identifier.
     Uuid(Uuid),
 }
+
 /// Any structure implementing the [ToAvro](trait.ToAvro.html) trait will be usable
 /// from a [Writer](../writer/struct.Writer.html).
 #[deprecated(
@@ -365,7 +366,7 @@ impl TryFrom<Value> for JsonValue {
 impl Value {
     /// Validate the value against the given [Schema](../schema/enum.Schema.html).
     ///
-    /// See the [Avro specification](https://avro.apache.org/docs/current/spec.html)
+    /// See the [Avro specification](https://avro.apache.org/docs/current/specification)
     /// for the full set of rules of schema validation.
     pub fn validate(&self, schema: &Schema) -> bool {
         self.validate_schemata(vec![schema])
@@ -612,14 +613,17 @@ impl Value {
                     }
                 })
             }
-            (_v, _s) => Some("Unsupported value-schema combination".to_string()),
+            (v, s) => Some(format!(
+                "Unsupported value-schema combination! Value: {:?}, schema: {:?}",
+                v, s
+            )),
         }
     }
 
     /// Attempt to perform schema resolution on the value, with the given
     /// [Schema](../schema/enum.Schema.html).
     ///
-    /// See [Schema Resolution](https://avro.apache.org/docs/current/spec.html#Schema+Resolution)
+    /// See [Schema Resolution](https://avro.apache.org/docs/current/specification/#schema-resolution)
     /// in the Avro specification for the full set of rules of schema
     /// resolution.
     pub fn resolve(self, schema: &Schema) -> AvroResult<Self> {
@@ -631,7 +635,7 @@ impl Value {
     /// Attempt to perform schema resolution on the value, with the given
     /// [Schema](../schema/enum.Schema.html) and set of schemas to use for Refs resolution.
     ///
-    /// See [Schema Resolution](https://avro.apache.org/docs/current/spec.html#Schema+Resolution)
+    /// See [Schema Resolution](https://avro.apache.org/docs/current/specification/#schema-resolution)
     /// in the Avro specification for the full set of rules of schema
     /// resolution.
     pub fn resolve_schemata(self, schema: &Schema, schemata: Vec<&Schema>) -> AvroResult<Self> {
@@ -720,7 +724,7 @@ impl Value {
             Value::String(ref string) => {
                 Value::Uuid(Uuid::from_str(string).map_err(Error::ConvertStrToUuid)?)
             }
-            other => return Err(Error::GetUuid(other.into())),
+            other => return Err(Error::GetUuid(other)),
         })
     }
 
@@ -728,7 +732,7 @@ impl Value {
         Ok(match self {
             bg @ Value::BigDecimal(_) => bg,
             Value::Bytes(b) => Value::BigDecimal(deserialize_big_decimal(&b).unwrap()),
-            other => return Err(Error::GetBigdecimal(other.into())),
+            other => return Err(Error::GetBigDecimal(other)),
         })
     }
 
@@ -744,7 +748,7 @@ impl Value {
                     bytes[8], bytes[9], bytes[10], bytes[11],
                 ]))
             }
-            other => return Err(Error::ResolveDuration(other.into())),
+            other => return Err(Error::ResolveDuration(other)),
         })
     }
 
@@ -790,21 +794,21 @@ impl Value {
                     Ok(Value::Decimal(Decimal::from(bytes)))
                 }
             }
-            other => Err(Error::ResolveDecimal(other.into())),
+            other => Err(Error::ResolveDecimal(other)),
         }
     }
 
     fn resolve_date(self) -> Result<Self, Error> {
         match self {
             Value::Date(d) | Value::Int(d) => Ok(Value::Date(d)),
-            other => Err(Error::GetDate(other.into())),
+            other => Err(Error::GetDate(other)),
         }
     }
 
     fn resolve_time_millis(self) -> Result<Self, Error> {
         match self {
             Value::TimeMillis(t) | Value::Int(t) => Ok(Value::TimeMillis(t)),
-            other => Err(Error::GetTimeMillis(other.into())),
+            other => Err(Error::GetTimeMillis(other)),
         }
     }
 
@@ -812,7 +816,7 @@ impl Value {
         match self {
             Value::TimeMicros(t) | Value::Long(t) => Ok(Value::TimeMicros(t)),
             Value::Int(t) => Ok(Value::TimeMicros(i64::from(t))),
-            other => Err(Error::GetTimeMicros(other.into())),
+            other => Err(Error::GetTimeMicros(other)),
         }
     }
 
@@ -820,7 +824,7 @@ impl Value {
         match self {
             Value::TimestampMillis(ts) | Value::Long(ts) => Ok(Value::TimestampMillis(ts)),
             Value::Int(ts) => Ok(Value::TimestampMillis(i64::from(ts))),
-            other => Err(Error::GetTimestampMillis(other.into())),
+            other => Err(Error::GetTimestampMillis(other)),
         }
     }
 
@@ -828,7 +832,7 @@ impl Value {
         match self {
             Value::TimestampMicros(ts) | Value::Long(ts) => Ok(Value::TimestampMicros(ts)),
             Value::Int(ts) => Ok(Value::TimestampMicros(i64::from(ts))),
-            other => Err(Error::GetTimestampMicros(other.into())),
+            other => Err(Error::GetTimestampMicros(other)),
         }
     }
 
@@ -836,7 +840,7 @@ impl Value {
         match self {
             Value::TimestampNanos(ts) | Value::Long(ts) => Ok(Value::TimestampNanos(ts)),
             Value::Int(ts) => Ok(Value::TimestampNanos(i64::from(ts))),
-            other => Err(Error::GetTimestampNanos(other.into())),
+            other => Err(Error::GetTimestampNanos(other)),
         }
     }
 
@@ -846,7 +850,7 @@ impl Value {
                 Ok(Value::LocalTimestampMillis(ts))
             }
             Value::Int(ts) => Ok(Value::LocalTimestampMillis(i64::from(ts))),
-            other => Err(Error::GetLocalTimestampMillis(other.into())),
+            other => Err(Error::GetLocalTimestampMillis(other)),
         }
     }
 
@@ -856,7 +860,7 @@ impl Value {
                 Ok(Value::LocalTimestampMicros(ts))
             }
             Value::Int(ts) => Ok(Value::LocalTimestampMicros(i64::from(ts))),
-            other => Err(Error::GetLocalTimestampMicros(other.into())),
+            other => Err(Error::GetLocalTimestampMicros(other)),
         }
     }
 
@@ -864,21 +868,21 @@ impl Value {
         match self {
             Value::LocalTimestampNanos(ts) | Value::Long(ts) => Ok(Value::LocalTimestampNanos(ts)),
             Value::Int(ts) => Ok(Value::LocalTimestampNanos(i64::from(ts))),
-            other => Err(Error::GetLocalTimestampNanos(other.into())),
+            other => Err(Error::GetLocalTimestampNanos(other)),
         }
     }
 
     fn resolve_null(self) -> Result<Self, Error> {
         match self {
             Value::Null => Ok(Value::Null),
-            other => Err(Error::GetNull(other.into())),
+            other => Err(Error::GetNull(other)),
         }
     }
 
     fn resolve_boolean(self) -> Result<Self, Error> {
         match self {
             Value::Boolean(b) => Ok(Value::Boolean(b)),
-            other => Err(Error::GetBoolean(other.into())),
+            other => Err(Error::GetBoolean(other)),
         }
     }
 
@@ -886,7 +890,7 @@ impl Value {
         match self {
             Value::Int(n) => Ok(Value::Int(n)),
             Value::Long(n) => Ok(Value::Int(n as i32)),
-            other => Err(Error::GetInt(other.into())),
+            other => Err(Error::GetInt(other)),
         }
     }
 
@@ -894,7 +898,7 @@ impl Value {
         match self {
             Value::Int(n) => Ok(Value::Long(i64::from(n))),
             Value::Long(n) => Ok(Value::Long(n)),
-            other => Err(Error::GetLong(other.into())),
+            other => Err(Error::GetLong(other)),
         }
     }
 
@@ -904,7 +908,11 @@ impl Value {
             Value::Long(n) => Ok(Value::Float(n as f32)),
             Value::Float(x) => Ok(Value::Float(x)),
             Value::Double(x) => Ok(Value::Float(x as f32)),
-            other => Err(Error::GetFloat(other.into())),
+            Value::String(ref x) => match Self::parse_special_float(x) {
+                Some(f) => Ok(Value::Float(f)),
+                None => Err(Error::GetFloat(self)),
+            },
+            other => Err(Error::GetFloat(other)),
         }
     }
 
@@ -914,7 +922,22 @@ impl Value {
             Value::Long(n) => Ok(Value::Double(n as f64)),
             Value::Float(x) => Ok(Value::Double(f64::from(x))),
             Value::Double(x) => Ok(Value::Double(x)),
-            other => Err(Error::GetDouble(other.into())),
+            Value::String(ref x) => match Self::parse_special_float(x) {
+                Some(f) => Ok(Value::Double(f64::from(f))),
+                None => Err(Error::GetDouble(self)),
+            },
+            other => Err(Error::GetDouble(other)),
+        }
+    }
+
+    /// IEEE 754 NaN and infinities are not valid JSON numbers.
+    /// So they are represented in JSON as strings.
+    fn parse_special_float(value: &str) -> Option<f32> {
+        match value {
+            "NaN" => Some(f32::NAN),
+            "INF" | "Infinity" => Some(f32::INFINITY),
+            "-INF" | "-Infinity" => Some(f32::NEG_INFINITY),
+            _ => None,
         }
     }
 
@@ -928,7 +951,7 @@ impl Value {
                     .map(Value::try_u8)
                     .collect::<Result<Vec<_>, _>>()?,
             )),
-            other => Err(Error::GetBytes(other.into())),
+            other => Err(Error::GetBytes(other)),
         }
     }
 
@@ -938,7 +961,7 @@ impl Value {
             Value::Bytes(bytes) | Value::Fixed(_, bytes) => Ok(Value::String(
                 String::from_utf8(bytes).map_err(Error::ConvertToUtf8)?,
             )),
-            other => Err(Error::GetString(other.into())),
+            other => Err(Error::GetString(other)),
         }
     }
 
@@ -959,7 +982,7 @@ impl Value {
                     Err(Error::CompareFixedSizes { size, n: s.len() })
                 }
             }
-            other => Err(Error::GetStringForFixed(other.into())),
+            other => Err(Error::GetStringForFixed(other)),
         }
     }
 
@@ -995,7 +1018,7 @@ impl Value {
         match self {
             Value::Enum(_raw_index, s) => validate_symbol(s, symbols),
             Value::String(s) => validate_symbol(s, symbols),
-            other => Err(Error::GetEnum(other.into())),
+            other => Err(Error::GetEnum(other)),
         }
     }
 
@@ -1037,7 +1060,7 @@ impl Value {
             )),
             other => Err(Error::GetArray {
                 expected: schema.into(),
-                other: other.into(),
+                other,
             }),
         }
     }
@@ -1061,7 +1084,7 @@ impl Value {
             )),
             other => Err(Error::GetMap {
                 expected: schema.into(),
-                other: other.into(),
+                other,
             }),
         }
     }
@@ -1080,7 +1103,7 @@ impl Value {
                     .iter()
                     .map(|field| (field.name.clone(), field.schema.clone().into()))
                     .collect(),
-                other: other.into(),
+                other,
             }),
         }?;
 
@@ -1141,7 +1164,7 @@ impl Value {
             }
         }
 
-        Err(Error::GetU8(int.into()))
+        Err(Error::GetU8(int))
     }
 }
 
@@ -1221,7 +1244,7 @@ mod tests {
                 Value::Int(42),
                 Schema::Boolean,
                 false,
-                "Invalid value: Int(42) for schema: Boolean. Reason: Unsupported value-schema combination",
+                "Invalid value: Int(42) for schema: Boolean. Reason: Unsupported value-schema combination! Value: Int(42), schema: Boolean",
             ),
             (
                 Value::Union(0, Box::new(Value::Null)),
@@ -1239,7 +1262,7 @@ mod tests {
                 Value::Union(0, Box::new(Value::Null)),
                 Schema::Union(UnionSchema::new(vec![Schema::Double, Schema::Int])?),
                 false,
-                "Invalid value: Union(0, Null) for schema: Union(UnionSchema { schemas: [Double, Int], variant_index: {Int: 1, Double: 0} }). Reason: Unsupported value-schema combination",
+                "Invalid value: Union(0, Null) for schema: Union(UnionSchema { schemas: [Double, Int], variant_index: {Int: 1, Double: 0} }). Reason: Unsupported value-schema combination! Value: Null, schema: Double",
             ),
             (
                 Value::Union(3, Box::new(Value::Int(42))),
@@ -1279,9 +1302,9 @@ mod tests {
                 Value::Array(vec![Value::Boolean(true)]),
                 Schema::array(Schema::Long),
                 false,
-                "Invalid value: Array([Boolean(true)]) for schema: Array(ArraySchema { items: Long, attributes: {} }). Reason: Unsupported value-schema combination",
+                "Invalid value: Array([Boolean(true)]) for schema: Array(ArraySchema { items: Long, attributes: {} }). Reason: Unsupported value-schema combination! Value: Boolean(true), schema: Long",
             ),
-            (Value::Record(vec![]), Schema::Null, false, "Invalid value: Record([]) for schema: Null. Reason: Unsupported value-schema combination"),
+            (Value::Record(vec![]), Schema::Null, false, "Invalid value: Record([]) for schema: Null. Reason: Unsupported value-schema combination! Value: Record([]), schema: Null"),
             (
                 Value::Fixed(12, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]),
                 Schema::Duration,
@@ -1551,7 +1574,7 @@ mod tests {
         ]);
         assert!(!value.validate(&schema));
         assert_logged(
-            r#"Invalid value: Record([("a", Boolean(false)), ("b", String("foo"))]) for schema: Record(RecordSchema { name: Name { name: "some_record", namespace: None }, aliases: None, doc: None, fields: [RecordField { name: "a", doc: None, aliases: None, default: None, schema: Long, order: Ascending, position: 0, custom_attributes: {} }, RecordField { name: "b", doc: None, aliases: None, default: None, schema: String, order: Ascending, position: 1, custom_attributes: {} }, RecordField { name: "c", doc: None, aliases: None, default: Some(Null), schema: Union(UnionSchema { schemas: [Null, Int], variant_index: {Null: 0, Int: 1} }), order: Ascending, position: 2, custom_attributes: {} }], lookup: {"a": 0, "b": 1, "c": 2}, attributes: {} }). Reason: Unsupported value-schema combination"#,
+            r#"Invalid value: Record([("a", Boolean(false)), ("b", String("foo"))]) for schema: Record(RecordSchema { name: Name { name: "some_record", namespace: None }, aliases: None, doc: None, fields: [RecordField { name: "a", doc: None, aliases: None, default: None, schema: Long, order: Ascending, position: 0, custom_attributes: {} }, RecordField { name: "b", doc: None, aliases: None, default: None, schema: String, order: Ascending, position: 1, custom_attributes: {} }, RecordField { name: "c", doc: None, aliases: None, default: Some(Null), schema: Union(UnionSchema { schemas: [Null, Int], variant_index: {Null: 0, Int: 1} }), order: Ascending, position: 2, custom_attributes: {} }], lookup: {"a": 0, "b": 1, "c": 2}, attributes: {} }). Reason: Unsupported value-schema combination! Value: Boolean(false), schema: Long"#,
         );
 
         let value = Value::Record(vec![
@@ -1849,7 +1872,7 @@ Field with name '"b"' is not a member of the map items"#,
                 {
                     "name": "event",
                     "type": [
-                        "null", 
+                        "null",
                         {
                             "type": "record",
                             "name": "event",
@@ -3114,5 +3137,86 @@ Field with name '"b"' is not a member of the map items"#,
                 .collect()
             )
         );
+    }
+
+    #[test]
+    fn avro_4024_resolve_double_from_unknown_string_err() -> TestResult {
+        let schema = Schema::parse_str(r#"{"type": "double"}"#)?;
+        let value = Value::String("unknown".to_owned());
+        match value.resolve(&schema) {
+            Err(err @ Error::GetDouble(_)) => {
+                assert_eq!(
+                    format!("{err:?}"),
+                    r#"Expected Value::Double, Value::Float, Value::Int, Value::Long or Value::String ("NaN", "INF", "Infinity", "-INF" or "-Infinity"), got: String("unknown")"#
+                );
+            }
+            other => {
+                panic!("Expected Error::GetDouble, got {other:?}");
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn avro_4024_resolve_float_from_unknown_string_err() -> TestResult {
+        let schema = Schema::parse_str(r#"{"type": "float"}"#)?;
+        let value = Value::String("unknown".to_owned());
+        match value.resolve(&schema) {
+            Err(err @ Error::GetFloat(_)) => {
+                assert_eq!(
+                    format!("{err:?}"),
+                    r#"Expected Value::Float, Value::Double, Value::Int, Value::Long or Value::String ("NaN", "INF", "Infinity", "-INF" or "-Infinity"), got: String("unknown")"#
+                );
+            }
+            other => {
+                panic!("Expected Error::GetFloat, got {other:?}");
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn avro_4029_resolve_from_unsupported_err() -> TestResult {
+        let data: Vec<(&str, Value, &str)> = vec!(
+            (r#"{ "name": "NAME", "type": "int" }"#, Value::Float(123_f32), "Expected Value::Int, got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "fixed", "size": 3 }"#, Value::Float(123_f32), "String expected for fixed, got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "bytes" }"#, Value::Float(123_f32), "Expected Value::Bytes, got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "string", "logicalType": "uuid" }"#, Value::String("abc-1234".into()), "Failed to convert &str to UUID: invalid group count: expected 5, found 2"),
+            (r#"{ "name": "NAME", "type": "string", "logicalType": "uuid" }"#, Value::Float(123_f32), "Expected Value::Uuid, got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "bytes", "logicalType": "big-decimal" }"#, Value::Float(123_f32), "Expected Value::BigDecimal, got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "fixed", "size": 12, "logicalType": "duration" }"#, Value::Float(123_f32), "Expected Value::Duration or Value::Fixed(12), got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "bytes", "logicalType": "decimal", "precision": 4, "scale": 3 }"#, Value::Float(123_f32), "Expected Value::Decimal, Value::Bytes or Value::Fixed, got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "bytes" }"#, Value::Array(vec!(Value::Long(256_i64))), "Unable to convert to u8, got Int(256)"),
+            (r#"{ "name": "NAME", "type": "int", "logicalType": "date" }"#, Value::Float(123_f32), "Expected Value::Date or Value::Int, got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "int", "logicalType": "time-millis" }"#, Value::Float(123_f32), "Expected Value::TimeMillis or Value::Int, got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "long", "logicalType": "time-micros" }"#, Value::Float(123_f32), "Expected Value::TimeMicros, Value::Long or Value::Int, got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "long", "logicalType": "timestamp-millis" }"#, Value::Float(123_f32), "Expected Value::TimestampMillis, Value::Long or Value::Int, got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "long", "logicalType": "timestamp-micros" }"#, Value::Float(123_f32), "Expected Value::TimestampMicros, Value::Long or Value::Int, got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "long", "logicalType": "timestamp-nanos" }"#, Value::Float(123_f32), "Expected Value::TimestampNanos, Value::Long or Value::Int, got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "long", "logicalType": "local-timestamp-millis" }"#, Value::Float(123_f32), "Expected Value::LocalTimestampMillis, Value::Long or Value::Int, got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "long", "logicalType": "local-timestamp-micros" }"#, Value::Float(123_f32), "Expected Value::LocalTimestampMicros, Value::Long or Value::Int, got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "long", "logicalType": "local-timestamp-nanos" }"#, Value::Float(123_f32), "Expected Value::LocalTimestampNanos, Value::Long or Value::Int, got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "null" }"#, Value::Float(123_f32), "Expected Value::Null, got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "boolean" }"#, Value::Float(123_f32), "Expected Value::Boolean, got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "int" }"#, Value::Float(123_f32), "Expected Value::Int, got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "long" }"#, Value::Float(123_f32), "Expected Value::Long or Value::Int, got: Float(123.0)"),
+            (r#"{ "name": "NAME", "type": "float" }"#, Value::Boolean(false), r#"Expected Value::Float, Value::Double, Value::Int, Value::Long or Value::String ("NaN", "INF", "Infinity", "-INF" or "-Infinity"), got: Boolean(false)"#),
+            (r#"{ "name": "NAME", "type": "double" }"#, Value::Boolean(false), r#"Expected Value::Double, Value::Float, Value::Int, Value::Long or Value::String ("NaN", "INF", "Infinity", "-INF" or "-Infinity"), got: Boolean(false)"#),
+            (r#"{ "name": "NAME", "type": "string" }"#, Value::Boolean(false), "Expected Value::String, Value::Bytes or Value::Fixed, got: Boolean(false)"),
+            (r#"{ "name": "NAME", "type": "enum", "symbols": ["one", "two"] }"#, Value::Boolean(false), "Expected Value::Enum, got: Boolean(false)"),
+        );
+
+        for (schema_str, value, expected_error) in data {
+            let schema = Schema::parse_str(schema_str)?;
+            match value.resolve(&schema) {
+                Err(error) => {
+                    assert_eq!(format!("{error}"), expected_error);
+                }
+                other => {
+                    panic!("Expected '{expected_error}', got {other:?}");
+                }
+            }
+        }
+        Ok(())
     }
 }

@@ -274,7 +274,7 @@ struct TestSchema {
         out << is.rdbuf();
     }
 
-    void printNext(Parser<Reader> &p) {
+    void printNext(Parser<Reader> &) {
         // no-op printer
     }
 
@@ -1031,8 +1031,8 @@ private:
 };
 
 void testNestedArraySchema() {
-    ArraySchema b0 = ArraySchema(NullSchema());
-    ArraySchema a0 = ArraySchema(b0);
+    ArraySchema b0{NullSchema()};
+    ArraySchema a0 = b0;
 
     avro::ValidSchema vs(a0);
     std::ostringstream actual;
@@ -1049,8 +1049,8 @@ void testNestedArraySchema() {
 }
 
 void testNestedMapSchema() {
-    MapSchema b0 = MapSchema(NullSchema());
-    MapSchema a0 = MapSchema(b0);
+    MapSchema b0{NullSchema()};
+    MapSchema a0 = b0;
 
     avro::ValidSchema vs(a0);
     std::ostringstream actual;

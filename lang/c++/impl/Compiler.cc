@@ -286,8 +286,9 @@ static Field makeField(const Entity &e, SymbolTable &st, const string &ns) {
     const Object &m = e.objectValue();
     string n = getStringField(e, m, "name");
     vector<string> aliases;
-    if (containsField(m, "aliases")) {
-        for (const auto &alias : getArrayField(e, m, "aliases")) {
+    string aliasesName = "aliases";
+    if (containsField(m, aliasesName)) {
+        for (const auto &alias : getArrayField(e, m, aliasesName)) {
             aliases.emplace_back(alias.stringValue());
         }
     }
@@ -313,7 +314,8 @@ static NodePtr makeRecordNode(const Entity &e, const Name &name,
     concepts::MultiAttribute<NodePtr> fieldValues;
     concepts::MultiAttribute<CustomAttributes> customAttributes;
     vector<GenericDatum> defaultValues;
-    for (const auto &it : getArrayField(e, m, "fields")) {
+    string fields = "fields";
+    for (const auto &it : getArrayField(e, m, fields)) {
         Field f = makeField(it, st, ns);
         fieldNames.add(f.name);
         fieldAliases.push_back(f.aliases);
@@ -343,9 +345,10 @@ static LogicalType makeLogicalType(const Entity &e, const Object &m) {
     if (typeField == "decimal") {
         LogicalType decimalType(LogicalType::DECIMAL);
         try {
-            decimalType.setPrecision(getLongField(e, m, "precision"));
+            // Precision probably won't go over 38 and scale beyond -77/+77
+            decimalType.setPrecision(static_cast<int32_t>(getLongField(e, m, "precision")));
             if (containsField(m, "scale")) {
-                decimalType.setScale(getLongField(e, m, "scale"));
+                decimalType.setScale(static_cast<int32_t>(getLongField(e, m, "scale")));
             }
         } catch (Exception &ex) {
             // If any part of the logical type is malformed, per the standard we
@@ -366,6 +369,14 @@ static LogicalType makeLogicalType(const Entity &e, const Object &m) {
         t = LogicalType::TIMESTAMP_MILLIS;
     else if (typeField == "timestamp-micros")
         t = LogicalType::TIMESTAMP_MICROS;
+    else if (typeField == "timestamp-nanos")
+        t = LogicalType::TIMESTAMP_NANOS;
+    else if (typeField == "local-timestamp-millis")
+        t = LogicalType::LOCAL_TIMESTAMP_MILLIS;
+    else if (typeField == "local-timestamp-micros")
+        t = LogicalType::LOCAL_TIMESTAMP_MICROS;
+    else if (typeField == "local-timestamp-nanos")
+        t = LogicalType::LOCAL_TIMESTAMP_NANOS;
     else if (typeField == "duration")
         t = LogicalType::DURATION;
     else if (typeField == "uuid")
@@ -375,7 +386,8 @@ static LogicalType makeLogicalType(const Entity &e, const Object &m) {
 
 static NodePtr makeEnumNode(const Entity &e,
                             const Name &name, const Object &m) {
-    const Array &v = getArrayField(e, m, "symbols");
+    string symbolsName = "symbols";
+    const Array &v = getArrayField(e, m, symbolsName);
     concepts::MultiAttribute<string> symbols;
     for (const auto &it : v) {
         if (it.type() != json::EntityType::String) {
@@ -392,12 +404,12 @@ static NodePtr makeEnumNode(const Entity &e,
 
 static NodePtr makeFixedNode(const Entity &e,
                              const Name &name, const Object &m) {
-    int v = static_cast<int>(getLongField(e, m, "size"));
+    int64_t v = getLongField(e, m, "size");
     if (v <= 0) {
         throw Exception("Size for fixed is not positive: {}", e.toString());
     }
     NodePtr node =
-        NodePtr(new NodeFixed(asSingleAttribute(name), asSingleAttribute(v)));
+        NodePtr(new NodeFixed(asSingleAttribute(name), asSingleAttribute(static_cast<size_t>(v))));
     if (containsField(m, "doc")) {
         node->setDoc(getDocField(e, m));
     }
@@ -447,8 +459,9 @@ static Name getName(const Entity &e, const Object &m, const string &ns) {
         }
     }
 
-    if (containsField(m, "aliases")) {
-        for (const auto &alias : getArrayField(e, m, "aliases")) {
+    std::string aliases = "aliases";
+    if (containsField(m, aliases)) {
+        for (const auto &alias : getArrayField(e, m, aliases)) {
             result.addAlias(alias.stringValue());
         }
     }
@@ -502,7 +515,7 @@ static NodePtr makeNode(const Entity &e, const Object &m,
     throw Exception("Unknown type definition: %1%", e.toString());
 }
 
-static NodePtr makeNode(const Entity &e, const Array &m,
+static NodePtr makeNode(const Entity &, const Array &m,
                         SymbolTable &st, const string &ns) {
     concepts::MultiAttribute<NodePtr> mm;
     for (const auto &it : m) {

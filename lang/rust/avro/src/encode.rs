@@ -67,7 +67,7 @@ pub(crate) fn encode_internal<S: Borrow<Schema>>(
     }
 
     if let Schema::Union(union_schema) = schema {
-        let mut index = -1;
+        let mut index = 0;
         for union_schema in &union_schema.schemas {
             index+= 1;
             if value.validate(union_schema) {
@@ -75,7 +75,7 @@ pub(crate) fn encode_internal<S: Borrow<Schema>>(
             }
             
         }
-
+        index -= 1;
         encode_int(index as i32, buffer);
         return encode_internal(value, union_schema.schemas.get(index).unwrap() , names, enclosing_namespace, buffer);
 

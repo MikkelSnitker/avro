@@ -2399,14 +2399,30 @@ pub mod derive {
             enclosing_namespace: &Namespace,
         ) -> Schema {
             let inner_schema = T::get_schema_in_ctxt(named_schemas, enclosing_namespace);
-            Schema::Union(UnionSchema {
-                schemas: vec![Schema::Null, inner_schema.clone()],
-                variant_index: vec![Schema::Null, inner_schema]
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, s)| (SchemaKind::from(s), idx))
-                    .collect(),
-            })
+            match inner_schema {
+                Schema::Union(union_schema) => {
+                    let mut variants = vec![Schema::Null];
+
+                    variants.append(&mut union_schema.schemas.clone());
+                    Schema::Union(UnionSchema {
+                        schemas: variants.clone(),
+                        variant_index: variants
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, s)| (SchemaKind::from(s), idx))
+                            .collect(),
+                    })
+                },
+                inner_schema => Schema::Union(UnionSchema {
+                    schemas: vec![Schema::Null, inner_schema.clone()],
+                    variant_index: vec![Schema::Null, inner_schema]
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, s)| (SchemaKind::from(s), idx))
+                        .collect(),
+                })
+            }
+            
         }
     }
 
